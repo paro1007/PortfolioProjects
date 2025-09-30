@@ -1,0 +1,80 @@
+-- =========================================
+-- Nashville Housing Data Cleaning
+-- =========================================
+
+-- 1. Standardize Date
+SELECT SaleDate, CONVERT(DATE, SaleDate) AS SaleDateConverted
+FROM Portfolio..NashvilleHousing;
+
+ALTER TABLE Portfolio..NashvilleHousing
+ADD SaleDateConverted DATE;
+
+UPDATE Portfolio..NashvilleHousing
+SET SaleDateConverted = CONVERT(DATE, SaleDate);
+
+-- 2. Fill missing PropertyAddress
+UPDATE a
+SET a.PropertyAddress = b.PropertyAddress
+FROM Portfolio..NashvilleHousing a
+JOIN Portfolio..NashvilleHousing b
+    ON a.ParcelID = b.ParcelID
+   AND a.[UniqueID ] <> b.[UniqueID ]
+WHERE a.PropertyAddress IS NULL;
+
+-- 3. Split Property Address
+ALTER TABLE Portfolio..NashvilleHousing
+ADD PropertySplitAddress NVARCHAR(255),
+    PropertySplitCity NVARCHAR(255);
+
+UPDATE Portfolio..NashvilleHousing
+SET PropertySplitAddress = SUBSTRING(PropertyAddress, 1, CHARINDEX(',', PropertyAddress) - 1);
+
+UPDATE Portfolio..NashvilleHousing
+SET PropertySplitCity = LTRIM(SUBSTRING(PropertyAddress, CHARINDEX(',', PropertyAddress) + 1, LEN(PropertyAddress)));
+
+-- 4. Split Owner Address
+ALTER TABLE Portfolio..NashvilleHousing
+ADD OwnerSplitAddress NVARCHAR(255),
+    OwnerSplitCity NVARCHAR(255),
+    OwnerSplitState NVARCHAR(255);
+
+UPDATE Portfolio..NashvilleHousing
+SET OwnerSplitAddress = PARSENAME(REPLACE(OwnerAddress, ',', '.'), 3);
+
+UPDATE Portfolio..NashvilleHousing
+SET OwnerSplitCity = PARSENAME(REPLACE(OwnerAddress, ',', '.'), 2);
+
+UPDATE Portfolio..NashvilleHousing
+SET OwnerSplitState = PARSENAME(REPLACE(OwnerAddress, ',', '.'), 1);
+
+-- 5. Standardize 'SoldAsVacant' field
+UPDATE Portfolio..NashvilleHousing
+SET SoldAsVacant = CASE 
+                        WHEN SoldAsVacant = 'Y' THEN 'YES'
+                        WHEN SoldAsVacant = 'N' THEN 'NO'
+                        ELSE SoldAsVacant
+                    END;
+
+-- 6. Remove duplicates
+WITH RowNumCTE AS (
+    SELECT *, 
+           ROW_NUMBER() OVER (
+               PARTITION BY ParcelID,
+                            PropertyAddress,
+                            SalePrice,
+                            SaleDate,
+                            LegalReference
+               ORDER BY UniqueID
+           ) AS row_num
+    FROM Portfolio..NashvilleHousing
+)
+DELETE FROM RowNumCTE
+WHERE row_num > 1;
+
+-- 7. Drop unused columns
+ALTER TABLE Portfolio..NashvilleHousing
+DROP COLUMN OwnerAddress, TaxDistrict, PropertyAddress, SaleDate;
+
+-- 8. Check final table
+SELECT * 
+FROM Portfolio..NashvilleHousing;
