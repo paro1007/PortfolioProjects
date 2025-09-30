@@ -78,3 +78,4 @@ DROP COLUMN OwnerAddress, TaxDistrict, PropertyAddress, SaleDate;
 -- 8. Check final table
 SELECT * 
 FROM Portfolio..NashvilleHousing;
+
